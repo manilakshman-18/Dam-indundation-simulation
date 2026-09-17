@@ -1,0 +1,48 @@
+{
+  "features": [
+    {
+      "geometry": {
+        "coordinates": [
+          [
+            [
+              77.775,
+              11.805
+            ],
+            [
+              77.825,
+              11.805
+            ],
+            [
+              77.85,
+              11.77
+            ],
+            [
+              77.82,
+              11.735
+            ],
+            [
+              77.77,
+              11.745
+            ],
+            [
+              77.75,
+              11.775
+            ],
+            [
+              77.775,
+              11.805
+            ]
+          ]
+        ],
+        "type": "Polygon"
+      },
+      "properties": {
+        "model": "Preliminary scenario",
+        "name": "Illustrative scenario area",
+        "status": "NOT A HYDRODYNAMIC PREDICTION"
+      },
+      "type": "Feature"
+    }
+  ],
+  "type": "FeatureCollection"
+}

@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mettur Dam Break Modelling</title>
+
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    >
+
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+
+<header class="topbar">
+    <div>
+        <h1>DamSafe</h1>
+        <p>Mettur Dam Break Inundation Modelling</p>
+    </div>
+    <span class="tag">MVP DEMO</span>
+</header>
+
+<main class="container">
+
+    <section class="intro">
+        <h2>Flood Simulation Dashboard</h2>
+        <p>
+            Prepare a dam-break scenario and visualize a preliminary
+            study-area layer for Mettur Dam.
+        </p>
+        <div class="notice">
+            DEMO LIMITATION: This prototype does not perform SPH,
+            Delft3D, or hydraulic calculations. The displayed scenario
+            is illustrative and must not be used for evacuation or
+            real flood-safety decisions.
+        </div>
+    </section>
+
+    <section class="layout">
+
+        <div class="panel">
+            <h2>Scenario Inputs</h2>
+
+            <form id="simulationForm">
+
+                <label for="dam_name">Dam name</label>
+                <input
+                    id="dam_name"
+                    name="dam_name"
+                    value="Mettur Dam"
+                    required
+                >
+
+                <label for="model">Modelling stage</label>
+                <select id="model" name="model">
+                    <option value="Preliminary scenario">
+                        Preliminary scenario
+                    </option>
+                    <option value="SPH - Planned integration">
+                        SPH - Planned integration
+                    </option>
+                    <option value="Delft3D - Planned integration">
+                        Delft3D - Planned integration
+                    </option>
+                </select>
+
+                <label for="water_level">
+                    Initial water level (m)
+                </label>
+                <input
+                    type="number"
+                    id="water_level"
+                    name="water_level"
+                    value="100"
+                    min="0.01"
+                    step="0.1"
+                    required
+                >
+
+                <label for="breach_width">
+                    Assumed breach width (m)
+                </label>
+                <input
+                    type="number"
+                    id="breach_width"
+                    name="breach_width"
+                    value="50"
+                    min="0.01"
+                    step="0.1"
+                    required
+                >
+
+                <label for="simulation_time">
+                    Requested simulation duration (hours)
+                </label>
+                <input
+                    type="number"
+                    id="simulation_time"
+                    name="simulation_time"
+                    value="6"
+                    min="0.01"
+                    step="0.5"
+                    required
+                >
+
+                <label for="dem">
+                    Upload DEM (.tif / .tiff)
+                </label>
+                <input
+                    type="file"
+                    id="dem"
+                    name="dem"
+                    accept=".tif,.tiff"
+                    required
+                >
+
+                <button type="submit" id="runButton">
+                    Run Preliminary Scenario
+                </button>
+
+            </form>
+
+            <div id="status" class="status">
+                Waiting for input.
+            </div>
+        </div>
+
+        <div class="panel map-panel">
+            <h2>Study Area Map</h2>
+            <div id="map"></div>
+            <p class="map-note">
+                The blue area is an illustrative scenario layer.
+                It is not a calculated flood extent.
+            </p>
+        </div>
+
+    </section>
+
+    <section class="panel results">
+        <h2>Simulation Results</h2>
+
+        <div id="results">
+            No scenario has been generated yet.
+        </div>
+
+        <a id="downloadLink"
+           class="download"
+           href="#"
+           download="scenario_result.json"
+           hidden>
+           Download GeoJSON result
+        </a>
+    </section>
+
+</main>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+    const map = L.map("map").setView([11.7870, 77.8000], 11);
+
+    L.tileLayer(
+        "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+        {
+            attribution: "&copy; OpenStreetMap contributors"
+        }
+    ).addTo(map);
+
+    L.marker([11.7870, 77.8000])
+        .addTo(map)
+        .bindPopup("<b>Mettur Dam</b><br>Study location")
+        .openPopup();
+
+    let scenarioLayer = null;
+
+    const form = document.getElementById("simulationForm");
+    const statusBox = document.getElementById("status");
+    const resultsBox = document.getElementById("results");
+    const runButton = document.getElementById("runButton");
+    const downloadLink = document.getElementById("downloadLink");
+
+    form.addEventListener("submit", async function(event) {
+        event.preventDefault();
+
+        runButton.disabled = true;
+        runButton.textContent = "Processing...";
+        statusBox.textContent = "Uploading DEM and preparing scenario...";
+        resultsBox.textContent = "";
+        downloadLink.hidden = true;
+
+        const formData = new FormData(form);
+
+        try {
+            const response = await fetch("/api/simulate", {
+                method: "POST",
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || "Request failed.");
+            }
+
+            if (scenarioLayer) {
+                map.removeLayer(scenarioLayer);
+            }
+
+            scenarioLayer = L.geoJSON(data.flood_layer, {
+                style: {
+                    color: "#1d4ed8",
+                    weight: 2,
+                    fillColor: "#60a5fa",
+                    fillOpacity: 0.35
+                },
+                onEachFeature: function(feature, layer) {
+                    layer.bindPopup(
+                        "<b>Illustrative Scenario</b><br>" +
+                        "Not a hydraulic flood prediction."
+                    );
+                }
+            }).addTo(map);
+
+            map.fitBounds(scenarioLayer.getBounds());
+
+            statusBox.textContent = data.status;
+
+            resultsBox.innerHTML = `
+                <div class="result-grid">
+                    <div>
+                        <strong>Scenario ID</strong>
+                        <span>${data.scenario_id}</span>
+                    </div>
+                    <div>
+                        <strong>Dam</strong>
+                        <span>${data.dam_name}</span>
+                    </div>
+                    <div>
+                        <strong>Model stage</strong>
+                        <span>${data.model}</span>
+                    </div>
+                    <div>
+                        <strong>DEM file</strong>
+                        <span>${data.dem_file}</span>
+                    </div>
+                    <div>
+                        <strong>Water level</strong>
+                        <span>${data.water_level} m</span>
+                    </div>
+                    <div>
+                        <strong>Breach width</strong>
+                        <span>${data.breach_width} m</span>
+                    </div>
+                </div>
+                <p class="warning">${data.warning}</p>
+            `;
+
+            const blob = new Blob(
+                [JSON.stringify(data.flood_layer, null, 2)],
+                {type: "application/geo+json"}
+            );
+
+            downloadLink.href = URL.createObjectURL(blob);
+            downloadLink.hidden = false;
+
+        } catch (error) {
+            statusBox.textContent = "Error";
+            resultsBox.textContent = error.message;
+        } finally {
+            runButton.disabled = false;
+            runButton.textContent = "Run Preliminary Scenario";
+        }
+    });
+</script>
+
+</body>
+</html>
